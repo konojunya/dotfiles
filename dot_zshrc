@@ -1,0 +1,229 @@
+echo "load .zshrc"
+
+#=====================================================
+# Basic
+# ====================================================
+# Customize to your needs...
+fpath=(/usr/local/share/zsh-completions $fpath)
+export LANG=en_US.UTF-8
+export EDITOR=vim
+
+# キー操作
+bindkey -e
+
+# 自動補完
+autoload -U compinit
+compinit -C
+
+# nobeep
+setopt no_beep
+setopt nolistbeep
+
+# ====================================================
+# Path
+# ====================================================
+export PATH=/usr/local/:$PATH
+export PATH=/opt/homebrew/bin:$PATH
+export PATH=/opt/homebrew/opt/llvm/bin:$PATH
+export PATH=/opt/homebrew/opt/openjdk/bin:$PATH
+
+# anyenv
+export PATH=$HOME/.anyenv/bin:$PATH
+anyenv() {
+  typeset command
+  command="$1"
+  if [ "$#" -gt 0 ]; then
+    shift
+  fi
+  command anyenv "$command" "$@"
+}
+eval "$(anyenv init -)"
+
+# deno
+export DENO_INSTALL=$HOME/.deno
+export PATH=$DENO_INSTALL/bin:$PATH
+fpath=(~/.zsh $fpath)
+autoload -Uz compinit
+compinit -u
+
+# rust
+export PATH=$HOME/.cargo/bin:$PATH
+
+# golang
+export GOPATH="$HOME/.ghq";
+export GOROOT="/opt/homebrew/opt/go/libexec";
+export PATH="$GOPATH/bin:$PATH"; # g-install: do NOT edit, see https://github.com/stefanmaric/g
+export GOROOT=/opt/homebrew/opt/go/libexec
+export GO111MODULE=on
+export PATH=$GOPATH:$PATH
+
+function go-mod-init() {
+  pwd | awk '{gsub("/Users/konojunya/ghq/src/", ""); print}' | xargs -I {} go mod init {}
+}
+
+alias goinit="go-mod-init"
+
+# direnv
+eval "$(direnv hook zsh)"
+
+# ghq
+export GHQ_PATH=$HOME/.ghq/src
+export PATH=$PATH:$HOME/.scripts/git-naming
+export PATH=/usr/local/:$PATH
+
+function fzf-cd() {
+ cd "$( ghq list --full-path | fzf)"
+}
+alias sd="fzf-cd"
+
+# llvm
+export LDFLAGS="-L/opt/homebrew/opt/llvm/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/llvm/include"
+
+# openjdk
+export CPPFLAGS="-I/opt/homebrew/opt/openjdk/include"
+
+# ====================================================
+# History
+# ====================================================
+# 履歴ファイルの保存先
+export HISTFILE=${HOME}/.zsh_history
+
+# メモリに保存される履歴の件数
+export HISTSIZE=1000000
+
+# 履歴ファイルに保存される履歴の件数
+export SAVEHIST=1000000
+
+# ヒストリに追加されるコマンド行が古いものと同じなら古いものを削除
+setopt hist_ignore_all_dups
+
+# 重複を記録しない
+setopt hist_ignore_dups
+
+# ヒストリを呼び出してから実行する間に一旦編集可能
+setopt hist_verify
+
+# 開始と終了を記録
+setopt EXTENDED_HISTORY
+
+# historyコマンドは履歴に登録しない
+setopt hist_no_store
+
+# 他のターミナルとヒストリーを共有
+setopt share_history
+
+# 余分な空白は詰めて記録
+setopt hist_reduce_blanks
+
+# 補完時にヒストリを自動的に展開
+setopt hist_expand
+
+# 履歴をインクリメンタルに追加
+setopt inc_append_history
+
+# カーソル位置で補完
+setopt complete_in_word
+
+# `=` 以降のパスも補完
+setopt magic_equal_subst
+
+# 補完候補に色を付ける
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+
+# 曖昧検索
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
+
+# ====================================================
+# tmux
+# ====================================================
+alias tmux="tmux -u"
+
+function dev() {
+  read "num?How many panes? (default 1, max 6): "
+
+  # 空なら通常 tmux
+  if [[ -z "$num" ]]; then
+    tmux
+    return
+  fi
+
+  # 数値でない or 0以下は拒否
+  if ! [[ "$num" =~ ^[0-9]+$ ]] || [[ "$num" -lt 1 ]]; then
+    echo "Invalid number: must be a positive integer"
+    return 1
+  fi
+
+  # 7以上は6に制限
+  if [[ "$num" -gt 6 ]]; then
+    echo "Too many panes. Falling back to 6."
+    num=6
+  fi
+
+  # カレントディレクトリ名を取得してウィンドウ名にする
+  local tab_name=${PWD##*/}
+
+  # セッション作成（ウィンドウ名つき）
+  tmux new-session -d -s dev-session -n "$tab_name"
+
+  # 必要な分だけ水平分割
+  for i in {1..$((num-1))}; do
+    tmux split-window -t dev-session -h
+  done
+
+  # レイアウト整える
+  tmux select-layout -t dev-session tiled
+
+  # 初期コマンド（必要なら自由に変更）
+  for i in $(seq 0 $((num-1))); do
+    tmux send-keys -t dev-session:0.$i "echo 'Pane $i ready'" C-m
+  done
+
+  # セッションに入る
+  tmux attach-session -t dev-session
+}
+
+# ====================================================
+# Aliases & Custom functions
+# ====================================================
+alias rm='rm -i'
+alias cp='cp -i'
+alias mv='mv -i'
+alias mkdir='mkdir -p'
+alias curl_header='curl -D - -s -o /dev/null'
+alias ls='ls -G'
+
+# claude
+alias claude="/Users/konojunya/.claude/local/claude"
+
+# <Tab> で候補選択
+zstyle ':completion:*:default' menu select=1
+
+# <Shift-Tab>で補完候補の逆順
+bindkey "^[[Z" reverse-menu-complete
+
+# 単語の一部として扱われる文字のセット
+WORDCHARS='*?_-.[]~=&;!#$%^(){}<>'
+
+# gcloud
+source "$(brew --prefix)/share/google-cloud-sdk/path.zsh.inc"
+source "$(brew --prefix)/share/google-cloud-sdk/completion.zsh.inc"
+
+# zsh
+ZSH_THEME="robbyrussell"
+plugins=(git)
+
+# pnpm
+export PNPM_HOME="/Users/konojunya/Library/pnpm"
+export PATH="$PNPM_HOME:$PATH"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+# starship
+eval "$(starship init zsh)"
+
+# bun completions
+[ -s "/Users/konojunya/.bun/_bun" ] && source "/Users/konojunya/.bun/_bun"
+
